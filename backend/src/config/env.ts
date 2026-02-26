@@ -1,33 +1,10 @@
-import dotenv from "dotenv";
-import path from "path";
+import "dotenv/config";
 
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+export const env = {
+  NODE_ENV: process.env.NODE_ENV || "development",
+  PORT: Number(process.env.PORT || 5000),
+  DATABASE_URL: process.env.DATABASE_URL!,
+  JWT_SECRET: process.env.JWT_SECRET!,
+};
 
-interface Env {
-  NODE_ENV: string;
-  PORT: number;
-  DATABASE_URL: string;
-  JWT_SECRET: string;
-}
-
-// Validate required variables and provide defaults
-function getEnv(): Env {
-  const { NODE_ENV, PORT, DATABASE_URL, JWT_SECRET } = process.env;
-
-  if (!DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
-  if (!JWT_SECRET) {
-    throw new Error("JWT_SECRET is required");
-  }
-
-  return {
-    NODE_ENV: NODE_ENV || "development",
-    PORT: parseInt(PORT || "3001", 10),
-    DATABASE_URL,
-    JWT_SECRET,
-  };
-}
-
-export const env = getEnv();
+export default env;
