@@ -1,0 +1,10 @@
+###
+GET https:localhost:5000/api/health
+
+POST  https:localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
