@@ -35,7 +35,7 @@ export const login = async (
     }
 
     const result = await authService.loginUser(email, password);
-    res.json(result);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

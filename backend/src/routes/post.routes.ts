@@ -1,8 +1,7 @@
-// src/routes/post.routes.ts
 import { Router } from "express";
 
-import { authorize } from "../middleware/authorize";
-import { authenticate } from "../middleware/auth";
+import { authorize } from "../middlewares/authorize";
+import { authenticate } from "../middlewares/auth";
 
 const router = Router();
 
