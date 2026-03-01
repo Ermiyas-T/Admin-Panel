@@ -22,7 +22,14 @@ export class UserRoleService {
       },
     });
   }
-
+  // get user roles
+  async getUserRoles(userId: string) {
+    return prisma.userRole.findMany({
+      where: {
+        userId: userId,
+      },
+    });
+  }
   // Remove a role from a user
   async removeRoleFromUser(userId: string, roleId: string) {
     return prisma.userRole.delete({
