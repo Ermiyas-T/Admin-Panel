@@ -26,6 +26,7 @@ app.use("/api/posts", postRouter);
 app.use("/api/users", userRouter);
 app.use("/api/roles", roleRouter);
 app.use("/api/permissions", permissionRouter);
+app.use("/api/user-roles", userRoleRouter);
 // 404 handler for unmatched routes
 app.use(notFound);
 
