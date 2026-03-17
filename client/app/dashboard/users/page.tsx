@@ -1,9 +1,11 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog } from '@headlessui/react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { Can } from '@/components/auth/Can';
+import { DashboardShell } from '@/components/layout/DashboardShell';
 import { getRoles } from '@/lib/api/roles';
 import {
   assignRoleToUser,
@@ -15,20 +17,13 @@ import {
 import type { Role, User } from '@/types';
 
 export default function UsersPage() {
-  // Page state: users list loaded from backend.
   const [users, setUsers] = useState<User[]>([]);
-  // Page state: roles list loaded from backend (used for mapping roleIds -> Role).
   const [roles, setRoles] = useState<Role[]>([]);
-  // Modal state: which user we are currently managing.
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  // Modal state: roles assigned to the selected user.
   const [userRoles, setUserRoles] = useState<Role[]>([]);
-  // Modal state: open/close flag.
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // UI state: show an error message instead of only console logging.
   const [error, setError] = useState<string>('');
 
-  // Fetch all users from `/api/users` (permission: read User).
   async function fetchUsers() {
     try {
       setError('');
@@ -39,7 +34,6 @@ export default function UsersPage() {
     }
   }
 
-  // Fetch all roles from `/api/roles` (permission: read Role).
   async function fetchRoles() {
     try {
       setError('');
@@ -50,7 +44,6 @@ export default function UsersPage() {
     }
   }
 
-  // Fetch the selected user's assigned roleIds and map them to Role objects.
   async function fetchUserRoles(userId: string) {
     try {
       setError('');
@@ -61,23 +54,26 @@ export default function UsersPage() {
     }
   }
 
-  // Fetch initial data (users + roles) once when the page mounts.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchUsers();
     void fetchRoles();
   }, []);
 
-  // Open the modal and load roles for the clicked user.
   const handleManageRoles = (user: User) => {
     setSelectedUser(user);
     setIsModalOpen(true);
     void fetchUserRoles(user.id);
   };
 
-  // Assign a role to the selected user (permission: update User).
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedUser(null);
+    setUserRoles([]);
+  };
+
   const handleAssignRole = async (roleId: string) => {
     if (!selectedUser) return;
+
     try {
       setError('');
       await assignRoleToUser(selectedUser.id, roleId);
@@ -87,9 +83,9 @@ export default function UsersPage() {
     }
   };
 
-  // Remove a role from the selected user (permission: update User).
   const handleRemoveRole = async (roleId: string) => {
     if (!selectedUser) return;
+
     try {
       setError('');
       await removeRoleFromUser(selectedUser.id, roleId);
@@ -99,37 +95,45 @@ export default function UsersPage() {
     }
   };
 
-  // Roles that are not yet assigned to the selected user.
   const availableRoles = useMemo(() => {
-    const assignedIds = new Set(userRoles.map((r) => r.id));
-    return roles.filter((r) => !assignedIds.has(r.id));
+    const assignedIds = new Set(userRoles.map((role) => role.id));
+    return roles.filter((role) => !assignedIds.has(role.id));
   }, [roles, userRoles]);
 
   return (
-    // AuthGuard protects the page at the route level (permission: read User).
     <AuthGuard requiredPermissions={[{ action: 'read', subject: 'User' }]}>
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Users</h1>
+      <DashboardShell
+        eyebrow="Directory"
+        title="Users"
+        description="Browse account records and manage role assignments without changing the existing user-management flow."
+      >
+        {error ? <div className="app-banner-error">{error}</div> : null}
 
-        {/* Error banner for any failed API operation */}
-        {error && (
-          <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>
-        )}
+        <section className="app-panel overflow-hidden">
+          <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-6">
+            <div>
+              <span className="app-chip">User List</span>
+              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                {users.length} registered user{users.length === 1 ? '' : 's'}
+              </h2>
+            </div>
+            <div className="app-panel-soft px-4 py-3 text-sm font-medium text-slate-600">
+              Role assignment controls open in the same modal workflow.
+            </div>
+          </div>
 
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
+          <ul className="app-list">
             {users.map((user) => (
-              <li key={user.id} className="px-6 py-4 flex items-center justify-between">
+              <li key={user.id} className="app-list-row">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{user.email}</p>
-                  <p className="text-sm text-gray-500">ID: {user.id}</p>
+                  <p className="text-base font-semibold text-slate-950">{user.email}</p>
+                  <p className="mt-1 font-mono text-xs text-slate-500">ID: {user.id}</p>
                 </div>
 
-                {/* CASL: button is visible only if ability.can("update","User") is true. */}
                 <Can I="update" a="User">
                   <button
                     onClick={() => handleManageRoles(user)}
-                    className="ml-4 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                    className="app-button-secondary"
                   >
                     Manage Roles
                   </button>
@@ -137,87 +141,110 @@ export default function UsersPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </section>
 
-        {/* Modal: role assignment UI for the selected user */}
-        {selectedUser && (
-          <Dialog
-            open={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            className="relative z-50"
-          >
-            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        {selectedUser ? (
+          <Dialog open={isModalOpen} onClose={handleCloseModal} className="relative z-50">
+            <div className="app-modal-backdrop" aria-hidden="true" />
 
-            <div className="fixed inset-0 flex items-center justify-center p-4">
-              <Dialog.Panel className="mx-auto w-full max-w-md rounded bg-white p-6">
-                <Dialog.Title className="text-lg font-medium mb-4">
-                  Manage Roles for {selectedUser.email}
-                </Dialog.Title>
+            <div className="fixed inset-0 overflow-y-auto p-4 sm:p-6">
+              <div className="flex min-h-full items-center justify-center">
+                <Dialog.Panel className="app-modal-panel">
+                  <Dialog.Title className="text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                    Manage roles for {selectedUser.email}
+                  </Dialog.Title>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Assign or remove roles using the same backend actions already wired
+                    into this page.
+                  </p>
 
-                <div className="space-y-4">
-                  <h3 className="font-medium">Current Roles</h3>
+                  <div className="mt-8 grid gap-4">
+                    <div className="app-panel-soft p-5">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
+                        Current Roles
+                      </h3>
 
-                  <div className="space-y-2">
-                    {userRoles.length === 0 && (
-                      <p className="text-sm text-gray-500">No roles assigned.</p>
-                    )}
+                      <div className="mt-4 space-y-3">
+                        {userRoles.length === 0 ? (
+                          <p className="text-sm text-slate-500">No roles assigned.</p>
+                        ) : null}
 
-                    {userRoles.map((role) => (
-                      <div key={role.id} className="flex justify-between items-center">
-                        <span>{role.name}</span>
-
-                        {/* CASL: removal is also guarded by update User permission. */}
-                        <Can I="update" a="User">
-                          <button
-                            onClick={() => handleRemoveRole(role.id)}
-                            className="text-red-600 hover:text-red-800"
+                        {userRoles.map((role) => (
+                          <div
+                            key={role.id}
+                            className="flex items-center justify-between gap-4 rounded-[20px] bg-white/80 px-4 py-3"
                           >
-                            Remove
-                          </button>
-                        </Can>
+                            <div>
+                              <p className="font-semibold text-slate-900">{role.name}</p>
+                              {role.description ? (
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {role.description}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <Can I="update" a="User">
+                              <button
+                                onClick={() => handleRemoveRole(role.id)}
+                                className="app-inline-danger"
+                              >
+                                Remove
+                              </button>
+                            </Can>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="app-panel-soft p-5">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
+                        Available Roles
+                      </h3>
+
+                      <div className="mt-4 space-y-3">
+                        {availableRoles.length === 0 ? (
+                          <p className="text-sm text-slate-500">No more roles to assign.</p>
+                        ) : null}
+
+                        {availableRoles.map((role) => (
+                          <div
+                            key={role.id}
+                            className="flex items-center justify-between gap-4 rounded-[20px] bg-white/80 px-4 py-3"
+                          >
+                            <div>
+                              <p className="font-semibold text-slate-900">{role.name}</p>
+                              {role.description ? (
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {role.description}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <Can I="update" a="User">
+                              <button
+                                onClick={() => void handleAssignRole(role.id)}
+                                className="app-inline-success"
+                              >
+                                Assign
+                              </button>
+                            </Can>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="font-medium">Available Roles</h3>
-
-                  <div className="space-y-2">
-                    {availableRoles.length === 0 && (
-                      <p className="text-sm text-gray-500">No more roles to assign.</p>
-                    )}
-
-                    {availableRoles.map((role) => (
-                      <div key={role.id} className="flex justify-between items-center">
-                        <span>{role.name}</span>
-
-                        {/* CASL: assignment is guarded by update User permission. */}
-                        <Can I="update" a="User">
-                          <button
-                            onClick={() => void handleAssignRole(role.id)}
-                            className="text-green-600 hover:text-green-800"
-                          >
-                            Assign
-                          </button>
-                        </Can>
-                      </div>
-                    ))}
+                  <div className="mt-8 flex justify-end">
+                    <button onClick={handleCloseModal} className="app-button">
+                      Close
+                    </button>
                   </div>
-                </div>
-
-                <div className="mt-6">
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 sm:text-sm"
-                  >
-                    Close
-                  </button>
-                </div>
-              </Dialog.Panel>
+                </Dialog.Panel>
+              </div>
             </div>
           </Dialog>
-        )}
-      </div>
+        ) : null}
+      </DashboardShell>
     </AuthGuard>
   );
 }
-

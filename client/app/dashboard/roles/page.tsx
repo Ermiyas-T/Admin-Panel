@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import Link from 'next/link';
@@ -5,24 +6,20 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { Can } from '@/components/auth/Can';
+import { DashboardShell } from '@/components/layout/DashboardShell';
 import { createRole, deleteRole, getRoles } from '@/lib/api/roles';
 import type { Role } from '@/types';
 
-// Form model used by react-hook-form for creating a role.
 interface CreateRoleForm {
   name: string;
   description?: string;
 }
 
 export default function RolesPage() {
-  // Page state: list of roles fetched from backend.
   const [roles, setRoles] = useState<Role[]>([]);
-  // Modal state: whether the "Create Role" dialog is visible.
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  // UI state: show an error message instead of only console logging.
   const [error, setError] = useState<string>('');
 
-  // Hook-form manages create-role form values + validation errors.
   const {
     register,
     handleSubmit,
@@ -32,7 +29,6 @@ export default function RolesPage() {
     defaultValues: { name: '', description: '' },
   });
 
-  // Fetch all roles from `/api/roles` (permission: read Role).
   async function fetchRoles() {
     try {
       setError('');
@@ -43,13 +39,10 @@ export default function RolesPage() {
     }
   }
 
-  // Fetch roles once when the page mounts.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchRoles();
   }, []);
 
-  // Create a role and refresh the list (permission: create Role).
   const onSubmitCreate = async (data: CreateRoleForm) => {
     try {
       setError('');
@@ -62,10 +55,9 @@ export default function RolesPage() {
     }
   };
 
-  // Delete a role and refresh the list (permission: delete Role).
   const handleDelete = async (id: string) => {
-    // Confirm is a simple client-side guard against accidental destructive actions.
     if (!confirm('Are you sure you want to delete this role?')) return;
+
     try {
       setError('');
       await deleteRole(id);
@@ -76,62 +68,66 @@ export default function RolesPage() {
   };
 
   return (
-    // AuthGuard protects the page at the route level (permission: read Role).
     <AuthGuard requiredPermissions={[{ action: 'read', subject: 'Role' }]}>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Roles</h1>
-
-          {/* CASL: Create button only renders if ability.can("create","Role") is true. */}
+      <DashboardShell
+        eyebrow="Roles"
+        title="Role Library"
+        description="Review role definitions, create new ones, and open detailed permission assignment screens with the same underlying data flow."
+        actions={
           <Can I="create" a="Role">
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="app-button"
             >
               Create Role
             </button>
           </Can>
-        </div>
+        }
+      >
+        {error ? <div className="app-banner-error">{error}</div> : null}
 
-        {/* Error banner for any failed API operation */}
-        {error && (
-          <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>
-        )}
+        <section className="app-panel overflow-hidden">
+          <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-6">
+            <div>
+              <span className="app-chip">Catalog</span>
+              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                {roles.length} role{roles.length === 1 ? '' : 's'} available
+              </h2>
+            </div>
+            <div className="app-panel-soft px-4 py-3 text-sm font-medium text-slate-600">
+              Select a role to inspect and manage its permissions.
+            </div>
+          </div>
 
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
+          <ul className="app-list">
             {roles.map((role) => (
-              <li key={role.id} className="px-6 py-4 flex items-center justify-between">
-                <div>
-                  {/* Role link is visible to readers; edit permission is checked separately below. */}
-                  <Link
-                    href={`/dashboard/roles/${role.id}`}
-                    className="text-sm font-medium text-blue-600 hover:underline"
-                  >
+              <li key={role.id} className="app-list-row">
+                <div className="max-w-2xl">
+                  <Link href={`/dashboard/roles/${role.id}`} className="app-link text-base">
                     {role.name}
                   </Link>
-
-                  {role.description && (
-                    <p className="text-sm text-gray-500">{role.description}</p>
+                  {role.description ? (
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      {role.description}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      No description provided.
+                    </p>
                   )}
                 </div>
 
-                <div className="flex space-x-2">
-                  {/* CASL: Edit link only renders if ability.can("update","Role") is true. */}
+                <div className="flex items-center gap-4">
                   <Can I="update" a="Role">
-                    <Link
-                      href={`/dashboard/roles/${role.id}`}
-                      className="text-indigo-600 hover:text-indigo-900"
-                    >
+                    <Link href={`/dashboard/roles/${role.id}`} className="app-inline-action">
                       Edit
                     </Link>
                   </Can>
 
-                  {/* CASL: Delete button only renders if ability.can("delete","Role") is true. */}
                   <Can I="delete" a="Role">
                     <button
                       onClick={() => void handleDelete(role.id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="app-inline-danger"
                     >
                       Delete
                     </button>
@@ -140,72 +136,76 @@ export default function RolesPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </section>
 
-        {/* Modal: simple create-role form */}
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-lg font-medium mb-4">Create New Role</h2>
+        {isCreateModalOpen ? (
+          <div className="fixed inset-0 z-50">
+            <div
+              className="app-modal-backdrop"
+              aria-hidden="true"
+              onClick={() => setIsCreateModalOpen(false)}
+            />
+            <div className="fixed inset-0 overflow-y-auto p-4 sm:p-6">
+              <div className="flex min-h-full items-center justify-center">
+                <div className="app-modal-panel">
+                  <h3 className="text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                    Create a new role
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Add a name and optional description. The existing create-role API
+                    flow remains unchanged.
+                  </p>
 
-              {/* handleSubmit runs validation first, then calls onSubmitCreate with the form data */}
-              <form onSubmit={handleSubmit(onSubmitCreate)} className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    Name
-                  </label>
+                  <form onSubmit={handleSubmit(onSubmitCreate)} className="mt-8 space-y-5">
+                    <div>
+                      <label htmlFor="name" className="app-label">
+                        Name
+                      </label>
+                      <input
+                        id="name"
+                        type="text"
+                        {...register('name', { required: 'Name is required' })}
+                        className="app-input"
+                        placeholder="Operations Manager"
+                      />
+                      {errors.name ? (
+                        <p className="mt-2 text-sm font-medium text-red-600">
+                          {errors.name.message}
+                        </p>
+                      ) : null}
+                    </div>
 
-                  {/* register wires the input into react-hook-form + provides validation rules */}
-                  <input
-                    id="name"
-                    type="text"
-                    {...register('name', { required: 'Name is required' })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  />
+                    <div>
+                      <label htmlFor="description" className="app-label">
+                        Description
+                      </label>
+                      <textarea
+                        id="description"
+                        {...register('description')}
+                        className="app-textarea"
+                        placeholder="Describe what this role is responsible for."
+                      />
+                    </div>
 
-                  {/* Inline validation feedback */}
-                  {errors.name && (
-                    <p className="text-red-600 text-sm">{errors.name.message}</p>
-                  )}
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateModalOpen(false)}
+                        className="app-button-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button type="submit" className="app-button">
+                        Create
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-
-                  {/* Description is optional, so we don't add a required rule here */}
-                  <textarea
-                    id="description"
-                    {...register('description')}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-2">
-                  {/* Cancel closes the modal without submitting */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-
-                  {/* Submit triggers role creation */}
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </DashboardShell>
     </AuthGuard>
   );
 }
-

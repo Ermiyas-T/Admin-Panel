@@ -16,7 +16,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 const apiClient = axios.create({
   // Base URL for all API requests. You can override this with NEXT_PUBLIC_API_URL
   // in your `.env` file. If it's not set, we fall back to the local dev API.
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -193,7 +193,8 @@ apiClient.interceptors.response.use(
 
       // Retry the original request with the new token
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (originalRequest.headers as any).Authorization = `Bearer ${newAccessToken}`;
+      (originalRequest.headers as any).Authorization =
+        `Bearer ${newAccessToken}`;
 
       return apiClient(originalRequest);
     } catch (refreshError) {

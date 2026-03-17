@@ -1,23 +1,22 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/lib/auth/AuthContext";
+import type { Metadata } from 'next';
+import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
+import './globals.css';
+import { AuthProvider } from '@/lib/auth/AuthContext';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const spaceGrotesk = Space_Grotesk({
+  variable: '--font-space-grotesk',
+  subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: '--font-ibm-plex-mono',
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
 });
 
 export const metadata: Metadata = {
-  // App title shown in the browser tab.
-  title: "RBAC Demo",
-  // App description (used for SEO metadata).
-  description: "CASL Authorization Demo",
+  title: 'RBAC Demo',
+  description: 'CASL Authorization Demo',
 };
 
 export default function RootLayout({
@@ -27,11 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        // Global typography + a neutral app background for all pages.
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
-      >
-        {/* AuthProvider exposes user/permissions/ability to the whole app. */}
+      <body className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

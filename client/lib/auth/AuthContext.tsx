@@ -49,6 +49,10 @@ const readStoredAuth = (): {
   permissions: string[];
   ability: AppAbility | null;
 } => {
+  if (typeof window === "undefined") {
+    return { user: null, permissions: [], ability: null };
+  }
+
   try {
     const storedUser = localStorage.getItem("user");
     const storedPermissions = localStorage.getItem("permissions");
