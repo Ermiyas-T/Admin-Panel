@@ -1,4 +1,5 @@
 import prisma from "../config/db";
+import cacheService from "./cache.service";
 
 export class RoleService {
   // get all roles with their permissions
@@ -73,6 +74,18 @@ export class RoleService {
     if (usresWithRole) {
       throw new Error("Cannot delete role that is assigned to users");
     }
+    
+    // Get all users with this role to invalidate their cache
+    const usersWithRole = await prisma.userRole.findMany({
+      where: { roleId: id },
+      select: { userId: true },
+    });
+    
+    // Invalidate cache for all affected users
+    await Promise.all(
+      usersWithRole.map((ur) => cacheService.invalidatePermissions(ur.userId))
+    );
+    
     return prisma.role.delete({
       where: { id },
     });
@@ -88,19 +101,46 @@ export class RoleService {
     if (existing) {
       throw new Error("Permission already assigned to role");
     }
-    return prisma.rolePermission.create({
+    
+    const result = await prisma.rolePermission.create({
       data: {
         roleId,
         permissionId,
       },
     });
+    
+    // Get all users with this role to invalidate their cache
+    const usersWithRole = await prisma.userRole.findMany({
+      where: { roleId },
+      select: { userId: true },
+    });
+    
+    // Invalidate cache for all affected users
+    await Promise.all(
+      usersWithRole.map((ur) => cacheService.invalidatePermissions(ur.userId))
+    );
+    
+    return result;
   }
   // remove  a permission from a role
   async removePermissionFromRole(roleId: string, permissionId: string) {
-    return await prisma.rolePermission.delete({
+    // Get all users with this role to invalidate their cache
+    const usersWithRole = await prisma.userRole.findMany({
+      where: { roleId },
+      select: { userId: true },
+    });
+    
+    const result = await prisma.rolePermission.delete({
       where: {
         roleId_permissionId: { roleId, permissionId },
       },
     });
+    
+    // Invalidate cache for all affected users
+    await Promise.all(
+      usersWithRole.map((ur) => cacheService.invalidatePermissions(ur.userId))
+    );
+    
+    return result;
   }
 }

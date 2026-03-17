@@ -1,6 +1,18 @@
 import bcrypt from "bcrypt";
 import prisma from "../config/db";
-import { signToken, JwtPayload } from "../utils/jwt";
+import { signAccessToken, signRefreshToken, JwtPayload } from "../utils/jwt";
+import cacheService from "./cache.service";
+
+export interface LoginResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: {
+    id: string;
+    email: string;
+    permissions: string[];
+  };
+}
 
 export class AuthService {
   // Register a new user
@@ -28,11 +40,13 @@ export class AuthService {
     return { id: user.id, email: user.email };
   }
 
-  // Login user and return JWT
-  async loginUser(email: string, password: string) {
-    // Find user by email
+  /**
+   * Fetch user permissions from database
+   * (Used on login and cache miss)
+   */
+  private async fetchUserPermissions(userId: string): Promise<string[]> {
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { id: userId },
       include: {
         roles: {
           include: {
@@ -51,13 +65,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error("Invalid credentials");
-    }
-
-    // Compare password
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      throw new Error("Invalid credentials");
+      throw new Error("User not found");
     }
 
     // Gather all permissions from all roles
@@ -68,20 +76,104 @@ export class AuthService {
         permissionStrings.push(`${perm.action}:${perm.subject}`);
       }
     }
-    // Remove duplicates (if same permission appears in multiple roles)
-    const uniquePermissions = [...new Set(permissionStrings)];
+    // Remove duplicates
+    return [...new Set(permissionStrings)];
+  }
 
-    // Create JWT payload
-    const payload: JwtPayload = {
-      userId: user.id,
-      permissions: uniquePermissions,
-    };
+  /**
+   * Get permissions with cache fallback
+   */
+  async getPermissions(userId: string): Promise<string[]> {
+    // Try cache first
+    const cached = await cacheService.getPermissions(userId);
+    if (cached) {
+      return cached;
+    }
 
-    const token = signToken(payload);
+    // Cache miss - fetch from DB
+    const permissions = await this.fetchUserPermissions(userId);
+    
+    // Cache for next time
+    await cacheService.cachePermissions(userId, permissions);
+    
+    return permissions;
+  }
+
+  /**
+   * Login user and return access + refresh tokens
+   */
+  async loginUser(email: string, password: string): Promise<LoginResult> {
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new Error("Invalid credentials");
+    }
+
+    // Compare password
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      throw new Error("Invalid credentials");
+    }
+
+    // Get permissions (with caching)
+    const permissions = await this.getPermissions(user.id);
+
+    // Generate tokens
+    const accessToken = signAccessToken(user.id);
+    const refreshToken = signRefreshToken(user.id);
+
+    // Store refresh token in Redis
+    await cacheService.storeRefreshToken(user.id, refreshToken);
 
     return {
-      token,
-      user: { id: user.id, email: user.email, permissions: uniquePermissions },
+      accessToken,
+      refreshToken,
+      expiresIn: 900, // 15 minutes in seconds
+      user: { id: user.id, email: user.email, permissions },
     };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshAccessToken(userId: string, refreshToken: string): Promise<{
+    accessToken: string;
+    expiresIn: number;
+  }> {
+    // Validate refresh token exists in Redis
+    const isValid = await cacheService.validateRefreshToken(userId, refreshToken);
+    if (!isValid) {
+      throw new Error("Invalid or expired refresh token");
+    }
+
+    // Get permissions (with caching)
+    const permissions = await this.getPermissions(userId);
+
+    // Generate new access token
+    const accessToken = signAccessToken(userId);
+
+    return {
+      accessToken,
+      expiresIn: 900,
+    };
+  }
+
+  /**
+   * Logout user - invalidate refresh token
+   */
+  async logoutUser(userId: string): Promise<void> {
+    await cacheService.clearUserCache(userId);
+  }
+
+  /**
+   * Invalidate permissions cache for a user
+   * (Call this when user's roles/permissions change)
+   */
+  async invalidateUserPermissions(userId: string): Promise<void> {
+    await cacheService.invalidatePermissions(userId);
+    await cacheService.incrementPermissionVersion(userId);
   }
 }
