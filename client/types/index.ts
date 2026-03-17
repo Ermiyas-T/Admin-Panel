@@ -10,6 +10,7 @@ export type Subject =
 export interface User {
   id: string;
   email: string;
+  permissions?: string[];
 }
 
 export interface LoginResponse {
