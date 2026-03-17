@@ -1,4 +1,3 @@
-// types/index.ts
 export type Action = "create" | "read" | "update" | "delete" | "manage";
 export type Subject =
   | "User"
@@ -14,9 +13,13 @@ export interface User {
 }
 
 export interface LoginResponse {
-  token: string;
-  user: User;
-  permissions: string[]; // e.g., ["create:Post", "read:User"]
+  message: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: User & {
+    permissions: string[]; // e.g., ["create:Post", "read:User"]
+  };
 }
 
 export interface Role {
