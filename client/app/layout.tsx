@@ -28,7 +28,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        // Global typography + a neutral app background for all pages.
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
         {/* AuthProvider exposes user/permissions/ability to the whole app. */}
         <AuthProvider>{children}</AuthProvider>

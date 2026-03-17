@@ -11,6 +11,7 @@ export interface User {
   id: string;
   email: string;
   permissions?: string[];
+  createdAt?: string;
 }
 
 export interface LoginResponse {
