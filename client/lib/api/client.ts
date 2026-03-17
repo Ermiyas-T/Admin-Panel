@@ -89,7 +89,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
     localStorage.setItem("token", accessToken);
 
     return accessToken;
-  } catch (err) {
+  } catch {
     // If refresh fails for any reason, we signal that by returning null
     return null;
   }
