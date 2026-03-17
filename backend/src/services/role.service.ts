@@ -1,33 +1,65 @@
 import prisma from "../config/db";
 import cacheService from "./cache.service";
 
+interface ServiceError extends Error {
+  status?: number;
+}
+
+const createServiceError = (message: string, status: number): ServiceError => {
+  const error = new Error(message) as ServiceError;
+  error.status = status;
+  return error;
+};
+
+const roleWithPermissionsInclude = {
+  permissions: {
+    include: {
+      permission: true,
+    },
+  },
+} as const;
+
+const normalizeRole = <
+  T extends {
+    permissions?: Array<{
+      permission: {
+        id: string;
+        action: string;
+        subject: string;
+        conditions: unknown;
+      };
+    }>;
+  },
+>(
+  role: T | null,
+) => {
+  if (!role) return role;
+
+  return {
+    ...role,
+    permissions: role.permissions?.map((entry) => entry.permission) ?? [],
+  };
+};
+
 export class RoleService {
   // get all roles with their permissions
 
   async getAllRoles() {
-    return prisma.role.findMany({
-      include: {
-        permissions: {
-          include: {
-            permission: true,
-          },
-        },
-      },
+    const roles = await prisma.role.findMany({
+      include: roleWithPermissionsInclude,
     });
+
+    return roles.map((role) => normalizeRole(role));
   }
 
   // get a single role by id
   async getRoleById(id: string) {
-    return prisma.role.findUnique({
+    const role = await prisma.role.findUnique({
       where: { id },
-      include: {
-        permissions: {
-          include: {
-            permission: true,
-          },
-        },
-      },
+      include: roleWithPermissionsInclude,
     });
+
+    return normalizeRole(role);
   }
   // create a new role
   async createRole(data: { name: string; description?: string }) {
@@ -36,7 +68,7 @@ export class RoleService {
       where: { name: data.name },
     });
     if (existing) {
-      throw new Error("Role name already exists");
+      throw createServiceError("Role name already exists", 409);
     }
     return prisma.role.create({
       data: {
@@ -52,7 +84,7 @@ export class RoleService {
       where: { name: data.name, NOT: { id } },
     });
     if (existing) {
-      throw new Error("Role name already exists");
+      throw createServiceError("Role name already exists", 409);
     }
     return prisma.role.update({
       where: { id },
@@ -72,7 +104,7 @@ export class RoleService {
       },
     });
     if (usresWithRole) {
-      throw new Error("Cannot delete role that is assigned to users");
+      throw createServiceError("Cannot delete role that is assigned to users", 409);
     }
     
     // Get all users with this role to invalidate their cache
@@ -99,7 +131,7 @@ export class RoleService {
       },
     });
     if (existing) {
-      throw new Error("Permission already assigned to role");
+      throw createServiceError("Permission already assigned to role", 409);
     }
     
     const result = await prisma.rolePermission.create({
