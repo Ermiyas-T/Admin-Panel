@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Can } from '@/components/auth/Can';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/use-auth-store';
 import type { Action, Subject } from '@/types';
 
 interface DashboardShellProps {
