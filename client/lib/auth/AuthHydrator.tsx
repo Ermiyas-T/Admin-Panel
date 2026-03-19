@@ -4,11 +4,11 @@ import { useEffect, useRef } from "react";
 import { useAuthStore } from "@/lib/auth/use-auth-store";
 
 /**
- * Zustand does not need a provider, but we still need one browser-only place
- * to pull any saved session data out of localStorage after the app mounts.
+ * Zustand does not need a provider, but we still need one startup component
+ * to ask the backend whether the browser already has a valid auth cookie.
  */
 export const AuthHydrator = () => {
-  const hydrateFromStorage = useAuthStore((state) => state.hydrateFromStorage);
+  const hydrateFromServer = useAuthStore((state) => state.hydrateFromServer);
   const hasHydratedRef = useRef(false);
 
   useEffect(() => {
@@ -17,8 +17,8 @@ export const AuthHydrator = () => {
     }
 
     hasHydratedRef.current = true;
-    hydrateFromStorage();
-  }, [hydrateFromStorage]);
+    void hydrateFromServer();
+  }, [hydrateFromServer]);
 
   return null;
 };

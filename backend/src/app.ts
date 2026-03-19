@@ -1,6 +1,8 @@
 import express, { Application } from "express";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import morgan from "morgan";
+import { env } from "./config/env";
 import healthRouter from "./routes/health";
 import { notFound } from "./middlewares/notFound";
 import { errorHandler } from "./middlewares/errorHandler";
@@ -15,7 +17,13 @@ const app: Application = express();
 
 // Middleware
 app.use(morgan("dev"));
-app.use(cors()); // Enable CORS for all routes (adjust in production)
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+  }),
+);
+app.use(cookieParser());
 app.use(express.json()); // Parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 

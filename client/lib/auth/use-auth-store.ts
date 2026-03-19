@@ -2,26 +2,48 @@
 
 import { useRouter } from "next/navigation";
 import { create } from "zustand";
-import { login as apiLogin } from "@/lib/api/auth";
 import {
-  clearPersistedAuth,
-  createAuthSnapshot,
-  emptyAuthSnapshot,
-  readStoredAuth,
-} from "@/lib/auth/auth-session-storage";
-import { AppAbility } from "@/lib/ability/ability";
-import { User } from "@/types";
+  getCurrentUser,
+  login as apiLogin,
+  logout as apiLogout,
+} from "@/lib/api/auth";
+import { AppAbility, defineAbilityFor } from "@/lib/ability/ability";
+import { AuthenticatedUser, User } from "@/types";
+
+interface AuthStateSnapshot {
+  user: User | null;
+  permissions: string[];
+  ability: AppAbility | null;
+}
+
+const emptyAuthSnapshot: AuthStateSnapshot = {
+  user: null,
+  permissions: [],
+  ability: null,
+};
+
+const createAbility = (permissions: string[]) =>
+  permissions.length ? defineAbilityFor(permissions) : null;
+
+const createAuthSnapshot = (
+  user: AuthenticatedUser | null,
+  permissions: string[] = user?.permissions ?? [],
+): AuthStateSnapshot => ({
+  user,
+  permissions,
+  ability: createAbility(permissions),
+});
 
 interface AuthStoreState {
   user: User | null;
   permissions: string[];
   ability: AppAbility | null;
   isLoading: boolean;
-  hydrateFromStorage: () => void;
-  setSession: (user: User | null, permissions?: string[]) => void;
+  hydrateFromServer: () => Promise<void>;
+  setSession: (user: AuthenticatedUser | null, permissions?: string[]) => void;
   clearSession: () => void;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 /**
@@ -29,28 +51,36 @@ interface AuthStoreState {
  *
  * Think of this file as the home for the auth Zustand hooks:
  * - state (`user`, `permissions`, `ability`, `isLoading`)
- * - actions (`login`, `logout`, `hydrateFromStorage`)
+ * - actions (`login`, `logout`, `hydrateFromServer`)
  */
 export const useAuthStore = create<AuthStoreState>((set) => ({
   ...emptyAuthSnapshot,
   isLoading: true,
 
-  hydrateFromStorage: () => {
-    set({
-      ...readStoredAuth(),
-      isLoading: false,
-    });
+  hydrateFromServer: async () => {
+    try {
+      const user = await getCurrentUser();
+
+      set({
+        ...createAuthSnapshot(user, user.permissions ?? []),
+        isLoading: false,
+      });
+    } catch {
+      set({
+        ...emptyAuthSnapshot,
+        isLoading: false,
+      });
+    }
   },
 
   setSession: (user, permissions = user?.permissions ?? []) => {
     set({
-      ...createAuthSnapshot(user, permissions),
+      ...createAuthSnapshot(user ? { ...user, permissions } : null, permissions),
       isLoading: false,
     });
   },
 
   clearSession: () => {
-    clearPersistedAuth();
     set({
       ...emptyAuthSnapshot,
       isLoading: false,
@@ -61,17 +91,20 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     const data = await apiLogin(email, password);
 
     set({
-      ...createAuthSnapshot(data.user, data.user.permissions ?? []),
+      ...createAuthSnapshot(data.user, data.user.permissions),
       isLoading: false,
     });
   },
 
-  logout: () => {
-    clearPersistedAuth();
-    set({
-      ...emptyAuthSnapshot,
-      isLoading: false,
-    });
+  logout: async () => {
+    try {
+      await apiLogout();
+    } finally {
+      set({
+        ...emptyAuthSnapshot,
+        isLoading: false,
+      });
+    }
   },
 }));
 
@@ -93,8 +126,8 @@ export const useAuth = () => {
     router.push("/dashboard");
   };
 
-  const logout = () => {
-    auth.logout();
+  const logout = async () => {
+    await auth.logout();
     router.push("/login");
   };
 

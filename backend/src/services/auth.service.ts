@@ -99,6 +99,28 @@ export class AuthService {
     return permissions;
   }
 
+  async getCurrentUser(userId: string): Promise<LoginResult["user"]> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const permissions = await this.getPermissions(userId);
+
+    return {
+      id: user.id,
+      email: user.email,
+      permissions,
+    };
+  }
+
   /**
    * Login user and return access + refresh tokens
    */

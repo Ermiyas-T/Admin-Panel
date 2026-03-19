@@ -1,17 +1,19 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import {
-  AUTH_STORAGE_KEYS,
-  clearPersistedAuth,
-} from "@/lib/auth/auth-session-storage";
+
+declare module "axios" {
+  interface AxiosRequestConfig {
+    skipLoginRedirect?: boolean;
+  }
+}
 
 /**
  * This file creates a single, shared Axios instance (`apiClient`)
  * that the whole frontend uses to talk to the backend API.
  *
  * It adds three important behaviors on top of plain Axios:
- * 1. Automatically attaches the current access token to every request.
+ * 1. Automatically includes auth cookies on every request.
  * 2. When the backend says "401 Unauthorized" because the access token expired,
- *    it tries to get a new access token using the refresh token.
+ *    it tries to refresh using the HttpOnly refresh-token cookie.
  * 3. If multiple requests fail at the same time while we are refreshing,
  *    it queues them and retries all of them after the refresh succeeds.
  */
@@ -21,6 +23,7 @@ const apiClient = axios.create({
   // Base URL for all API requests. You can override this with NEXT_PUBLIC_API_URL
   // in your `.env` file. If it's not set, we fall back to the local dev API.
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -36,7 +39,7 @@ const apiClient = axios.create({
  */
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: (value: unknown) => void;
+  resolve: () => void;
   reject: (reason?: unknown) => void;
 }> = [];
 
@@ -46,82 +49,35 @@ let failedQueue: Array<{
  * - if we got an error, we reject all waiting promises
  * - if we got a new token, we resolve them with that token
  */
-const processQueue = (error: unknown | null, token: string | null = null) => {
+const processQueue = (error: unknown | null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
-      prom.resolve(token);
+      prom.resolve();
     }
   });
   failedQueue = [];
 };
 
 /**
- * Helper to read the current access token from localStorage.
- *
- * We prefer `accessToken`, but we also fall back to `token` to
- * keep compatibility with any older code that still uses that key.
- */
-const getStoredAccessToken = () =>
-  localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) ||
-  localStorage.getItem(AUTH_STORAGE_KEYS.legacyAccessToken);
-
-/**
  * Call the backend to exchange the refresh token for a new access token.
  *
- * - Reads `refreshToken` from localStorage.
- * - Sends POST /auth/refresh with that token.
- * - Saves the new access token back to localStorage.
+ * The browser automatically includes the HttpOnly refresh-token cookie because
+ * this Axios client is configured with `withCredentials: true`.
  *
  * Returns:
- * - the new access token string if everything worked
- * - `null` if something went wrong (no refresh token, network error, etc.)
+ * - `true` if everything worked
+ * - `false` if something went wrong
  */
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = localStorage.getItem(AUTH_STORAGE_KEYS.refreshToken);
-  if (!refreshToken) return null;
-
+const refreshAccessToken = async (): Promise<boolean> => {
   try {
-    const response = await apiClient.post("/auth/refresh", { refreshToken });
-    const { accessToken } = response.data as { accessToken?: string };
-
-    if (!accessToken) return null;
-
-    // Store the new access token so future requests use it
-    localStorage.setItem(AUTH_STORAGE_KEYS.accessToken, accessToken);
-    // Keep the legacy key in sync during transition if used elsewhere
-    localStorage.setItem(AUTH_STORAGE_KEYS.legacyAccessToken, accessToken);
-
-    return accessToken;
+    await apiClient.post("/auth/refresh");
+    return true;
   } catch {
-    // If refresh fails for any reason, we signal that by returning null
-    return null;
+    return false;
   }
 };
-
-/**
- * REQUEST INTERCEPTOR
- *
- * This runs BEFORE every request is sent.
- * Its job is to:
- * - read the access token from localStorage
- * - attach it to the `Authorization` header if it exists
- */
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getStoredAccessToken();
-
-    if (token) {
-      // We cast to `any` here because Axios' header type is a bit loose.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (config.headers as any).Authorization = `Bearer ${token}`;
-    }
-
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
 
 /**
  * RESPONSE INTERCEPTOR
@@ -130,9 +86,9 @@ apiClient.interceptors.request.use(
  * Normal successful responses just pass through.
  *
  * If we see a 401 Unauthorized from a non-auth endpoint, we:
- * 1. Try to refresh the access token using the refresh token.
- * 2. If refresh succeeds, retry the original request with the new token.
- * 3. If refresh fails, clear auth state and send the user to the login page.
+ * 1. Try to refresh the access cookie using the refresh cookie.
+ * 2. If refresh succeeds, retry the original request.
+ * 3. If refresh fails, send the user to the login page.
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -143,6 +99,7 @@ apiClient.interceptors.response.use(
      */
     interface RetryableRequestConfig extends InternalAxiosRequestConfig {
       _retry?: boolean;
+      skipLoginRedirect?: boolean;
     }
 
     // The original request configuration that failed
@@ -173,11 +130,7 @@ apiClient.interceptors.response.use(
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
-        .then((token) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (originalRequest.headers as any).Authorization = `Bearer ${token}`;
-          return apiClient(originalRequest);
-        })
+        .then(() => apiClient(originalRequest))
         .catch((err) => Promise.reject(err));
     }
 
@@ -187,30 +140,26 @@ apiClient.interceptors.response.use(
 
     try {
       // Attempt to get a new access token using the refresh token
-      const newAccessToken = await refreshAccessToken();
+      const didRefresh = await refreshAccessToken();
 
-      if (!newAccessToken) {
+      if (!didRefresh) {
         throw new Error("Unable to refresh access token");
       }
 
-      // Tell all queued requests that we have a new token
-      processQueue(null, newAccessToken);
-
-      // Retry the original request with the new token
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (originalRequest.headers as any).Authorization =
-        `Bearer ${newAccessToken}`;
+      // Tell all queued requests that the browser now has a fresh access cookie.
+      processQueue(null);
 
       return apiClient(originalRequest);
     } catch (refreshError) {
       // Refresh failed: notify all waiting requests and clear auth state.
-      processQueue(refreshError, null);
-
-      // Clear everything we know about the current session
-      clearPersistedAuth();
+      processQueue(refreshError);
 
       // On the client, redirect the user to the login page
-      if (typeof window !== "undefined") {
+      if (
+        typeof window !== "undefined" &&
+        !originalRequest.skipLoginRedirect &&
+        window.location.pathname !== "/login"
+      ) {
         window.location.href = "/login";
       }
 

@@ -1,6 +1,5 @@
 import apiClient from "./client";
-import { persistAuthSession } from "@/lib/auth/auth-session-storage";
-import { LoginResponse } from "@/types";
+import { LoginResponse, MeResponse } from "@/types";
 
 export const login = async (
   email: string,
@@ -11,11 +10,16 @@ export const login = async (
     password,
   });
 
-  const data = response.data;
+  return response.data;
+};
 
-  // Persisting the session lives in one helper so the API layer and store
-  // always stay in sync about which keys are used.
-  persistAuthSession(data);
+export const logout = async (): Promise<void> => {
+  await apiClient.post("/auth/logout");
+};
 
-  return data;
+export const getCurrentUser = async (): Promise<MeResponse["user"]> => {
+  const response = await apiClient.get<MeResponse>("/auth/me", {
+    skipLoginRedirect: true,
+  });
+  return response.data.user;
 };

@@ -14,14 +14,18 @@ export interface User {
   createdAt?: string;
 }
 
+export interface AuthenticatedUser extends User {
+  permissions: string[];
+}
+
 export interface LoginResponse {
   message: string;
-  accessToken: string;
-  refreshToken: string;
   expiresIn: number;
-  user: User & {
-    permissions: string[]; // e.g., ["create:Post", "read:User"]
-  };
+  user: AuthenticatedUser;
+}
+
+export interface MeResponse {
+  user: AuthenticatedUser;
 }
 
 export interface Role {

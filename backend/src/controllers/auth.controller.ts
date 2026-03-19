@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/auth.service";
 import { verifyToken, isRefreshToken } from "../utils/jwt";
+import {
+  clearAuthCookies,
+  setAccessTokenCookie,
+  setAuthCookies,
+} from "../utils/authCookies";
 
 const authService = new AuthService();
 
@@ -36,9 +41,15 @@ export const login = async (
     }
 
     const result = await authService.loginUser(email, password);
+    setAuthCookies(res, {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
+
     res.status(200).json({
       message: "Login successful",
-      ...result,
+      expiresIn: result.expiresIn,
+      user: result.user,
     });
   } catch (error) {
     next(error);
@@ -54,7 +65,8 @@ export const refreshToken = async (
   next: NextFunction,
 ) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken =
+      (req.cookies?.refreshToken as string | undefined) || req.body?.refreshToken;
     
     if (!refreshToken) {
       return res.status(400).json({ message: "Refresh token required" });
@@ -69,9 +81,10 @@ export const refreshToken = async (
 
     // Get new access token
     const result = await authService.refreshAccessToken(payload.userId, refreshToken);
+    setAccessTokenCookie(res, result.accessToken);
     
     res.status(200).json({
-      accessToken: result.accessToken,
+      message: "Token refreshed",
       expiresIn: result.expiresIn,
     });
   } catch (error) {
@@ -89,10 +102,12 @@ export const logout = async (
 ) => {
   try {
     if (!req.user?.id) {
+      clearAuthCookies(res);
       return res.status(401).json({ message: "Unauthorized" });
     }
 
     await authService.logoutUser(req.user.id);
+    clearAuthCookies(res);
     res.status(200).json({ message: "Logout successful" });
   } catch (error) {
     next(error);
@@ -137,14 +152,9 @@ export const getMe = async (
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const permissions = await authService.getPermissions(req.user.id);
-    
-    res.status(200).json({
-      user: {
-        id: req.user.id,
-        permissions,
-      },
-    });
+    const user = await authService.getCurrentUser(req.user.id);
+
+    res.status(200).json({ user });
   } catch (error) {
     next(error);
   }

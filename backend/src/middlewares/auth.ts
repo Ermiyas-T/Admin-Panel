@@ -9,13 +9,18 @@ export const authenticate = async (
   next: NextFunction,
 ) => {
   try {
-    // Get token from Authorization header (Bearer <token>)
+    // Prefer the HttpOnly access-token cookie. Keep the Bearer header fallback
+    // during the migration so older clients can still authenticate.
+    const cookieToken = req.cookies?.accessToken as string | undefined;
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const headerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
+    const token = cookieToken || headerToken;
+
+    if (!token) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-
-    const token = authHeader.split(" ")[1];
     const payload = verifyToken(token);
 
     // Validate it's an access token (new format) or legacy token
