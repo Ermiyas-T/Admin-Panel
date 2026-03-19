@@ -1,4 +1,5 @@
 import apiClient from "./client";
+import { persistAuthSession } from "@/lib/auth/auth-session-storage";
 import { LoginResponse } from "@/types";
 
 export const login = async (
@@ -12,15 +13,9 @@ export const login = async (
 
   const data = response.data;
 
-  // Persist tokens and user info for the rest of the app to use
-  localStorage.setItem("accessToken", data.accessToken);
-  localStorage.setItem("refreshToken", data.refreshToken);
-  localStorage.setItem("token", data.accessToken); // legacy key for compatibility
-  localStorage.setItem("user", JSON.stringify(data.user));
-  localStorage.setItem(
-    "permissions",
-    JSON.stringify(data.user.permissions ?? []),
-  );
+  // Persisting the session lives in one helper so the API layer and store
+  // always stay in sync about which keys are used.
+  persistAuthSession(data);
 
   return data;
 };

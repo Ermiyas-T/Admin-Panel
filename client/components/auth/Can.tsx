@@ -2,13 +2,13 @@
 
 import { Can as CaslCan } from '@casl/react';
 import { ReactNode } from 'react';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/use-auth-store';
 import { Action, Subject } from '@/types';
 
 /**
  * `Can` is a tiny helper component for permission-based rendering.
  *
- * It reads the current CASL `ability` from `AuthContext`, then:
+ * It reads the current CASL `ability` from the auth Zustand store, then:
  * - renders `children` if the user can perform the action on the subject
  * - otherwise renders `fallback` (defaults to `null`)
  *
@@ -37,4 +37,3 @@ export const Can = ({ I, a, children, fallback = null }: CanProps) => {
     </CaslCan>
   );
 };
-

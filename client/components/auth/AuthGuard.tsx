@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/use-auth-store';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { Action, Subject } from '@/types';
 

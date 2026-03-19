@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { Can } from '@/components/auth/Can';
 import { DashboardShell } from '@/components/layout/DashboardShell';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/use-auth-store';
 
 export default function DashboardPage() {
   const { user } = useAuth();

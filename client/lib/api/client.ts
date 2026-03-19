@@ -1,4 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import {
+  AUTH_STORAGE_KEYS,
+  clearPersistedAuth,
+} from "@/lib/auth/auth-session-storage";
 
 /**
  * This file creates a single, shared Axios instance (`apiClient`)
@@ -60,7 +64,8 @@ const processQueue = (error: unknown | null, token: string | null = null) => {
  * keep compatibility with any older code that still uses that key.
  */
 const getStoredAccessToken = () =>
-  localStorage.getItem("accessToken") || localStorage.getItem("token");
+  localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) ||
+  localStorage.getItem(AUTH_STORAGE_KEYS.legacyAccessToken);
 
 /**
  * Call the backend to exchange the refresh token for a new access token.
@@ -74,7 +79,7 @@ const getStoredAccessToken = () =>
  * - `null` if something went wrong (no refresh token, network error, etc.)
  */
 const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = localStorage.getItem("refreshToken");
+  const refreshToken = localStorage.getItem(AUTH_STORAGE_KEYS.refreshToken);
   if (!refreshToken) return null;
 
   try {
@@ -84,9 +89,9 @@ const refreshAccessToken = async (): Promise<string | null> => {
     if (!accessToken) return null;
 
     // Store the new access token so future requests use it
-    localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem(AUTH_STORAGE_KEYS.accessToken, accessToken);
     // Keep the legacy key in sync during transition if used elsewhere
-    localStorage.setItem("token", accessToken);
+    localStorage.setItem(AUTH_STORAGE_KEYS.legacyAccessToken, accessToken);
 
     return accessToken;
   } catch {
@@ -202,11 +207,7 @@ apiClient.interceptors.response.use(
       processQueue(refreshError, null);
 
       // Clear everything we know about the current session
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("permissions");
+      clearPersistedAuth();
 
       // On the client, redirect the user to the login page
       if (typeof window !== "undefined") {
